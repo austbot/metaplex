@@ -1,12 +1,10 @@
-pub mod utils;
-
 use {
-    crate::utils::{assert_initialized, assert_owned_by, spl_token_transfer, TokenTransferParams},
     anchor_lang::{
-        prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize,
-        Discriminator, Key,
+        AnchorDeserialize, AnchorSerialize, Discriminator, Key,
+        prelude::*, solana_program::system_program,
     },
     arrayref::array_ref,
+    crate::utils::{assert_initialized, assert_owned_by, spl_token_transfer, TokenTransferParams},
     metaplex_token_metadata::{
         instruction::{create_master_edition, create_metadata_accounts, update_metadata_accounts},
         state::{
@@ -17,7 +15,10 @@ use {
     std::cell::Ref,
 };
 
+pub mod utils;
+
 const PREFIX: &str = "candy_machine";
+
 #[program]
 pub mod nft_candy_machine {
     use anchor_lang::solana_program::{
@@ -29,6 +30,8 @@ pub mod nft_candy_machine {
 
     pub fn mint_nft<'info>(ctx: Context<'_, '_, '_, 'info, MintNFT<'info>>) -> ProgramResult {
         let candy_machine = &mut ctx.accounts.candy_machine;
+        let bad_machine = &ctx.accounts.update_authority;
+        msg!("im here in the program");
         let config = &ctx.accounts.config;
         let clock = &ctx.accounts.clock;
 
@@ -103,28 +106,27 @@ pub mod nft_candy_machine {
             .checked_add(1)
             .ok_or(ErrorCode::NumericalOverflowError)?;
 
-        let config_key = config.key();
         let authority_seeds = [
             PREFIX.as_bytes(),
-            config_key.as_ref(),
-            candy_machine.data.uuid.as_bytes(),
-            &[candy_machine.bump],
+            bad_machine.config.as_ref(),
+            bad_machine.data.uuid.as_bytes(),
+            &[bad_machine.bump],
         ];
 
         let mut creators: Vec<metaplex_token_metadata::state::Creator> =
             vec![metaplex_token_metadata::state::Creator {
-                address: candy_machine.key(),
+                address: bad_machine.key(),
                 verified: true,
-                share: 0,
+                share: 100,
             }];
 
-        for c in &config.data.creators {
-            creators.push(metaplex_token_metadata::state::Creator {
-                address: c.address,
-                verified: false,
-                share: c.share,
-            });
-        }
+        // for c in &config.data.creators {
+        //     creators.push(metaplex_token_metadata::state::Creator {
+        //         address: c.address,
+        //         verified: false,
+        //         share: c.share,
+        //     });
+        // }
 
         let metadata_infos = vec![
             ctx.accounts.metadata.clone(),
@@ -135,7 +137,7 @@ pub mod nft_candy_machine {
             ctx.accounts.token_program.clone(),
             ctx.accounts.system_program.clone(),
             ctx.accounts.rent.to_account_info().clone(),
-            candy_machine.to_account_info().clone(),
+            bad_machine.to_account_info()
         ];
 
         let master_edition_infos = vec![
@@ -148,9 +150,9 @@ pub mod nft_candy_machine {
             ctx.accounts.token_program.clone(),
             ctx.accounts.system_program.clone(),
             ctx.accounts.rent.to_account_info().clone(),
-            candy_machine.to_account_info().clone(),
+            bad_machine.to_account_info()
         ];
-
+        msg!("Invoking metadata 2");
         invoke_signed(
             &create_metadata_accounts(
                 *ctx.accounts.token_metadata_program.key,
@@ -158,7 +160,7 @@ pub mod nft_candy_machine {
                 *ctx.accounts.mint.key,
                 *ctx.accounts.mint_authority.key,
                 *ctx.accounts.payer.key,
-                candy_machine.key(),
+                ctx.accounts.update_authority.key(),
                 config_line.name,
                 config.data.symbol.clone(),
                 config_line.uri,
@@ -170,13 +172,13 @@ pub mod nft_candy_machine {
             metadata_infos.as_slice(),
             &[&authority_seeds],
         )?;
-
+        msg!("Invoking master");
         invoke_signed(
             &create_master_edition(
                 *ctx.accounts.token_metadata_program.key,
                 *ctx.accounts.master_edition.key,
                 *ctx.accounts.mint.key,
-                candy_machine.key(),
+                ctx.accounts.update_authority.key(),
                 *ctx.accounts.mint_authority.key,
                 *ctx.accounts.metadata.key,
                 *ctx.accounts.payer.key,
@@ -186,28 +188,6 @@ pub mod nft_candy_machine {
             &[&authority_seeds],
         )?;
 
-        let mut new_update_authority = Some(candy_machine.authority);
-
-        if !ctx.accounts.config.data.retain_authority {
-            new_update_authority = Some(ctx.accounts.update_authority.key());
-        }
-
-        invoke_signed(
-            &update_metadata_accounts(
-                *ctx.accounts.token_metadata_program.key,
-                *ctx.accounts.metadata.key,
-                candy_machine.key(),
-                new_update_authority,
-                None,
-                Some(true),
-            ),
-            &[
-                ctx.accounts.token_metadata_program.clone(),
-                ctx.accounts.metadata.clone(),
-                candy_machine.to_account_info().clone(),
-            ],
-            &[&authority_seeds],
-        )?;
 
         Ok(())
     }
@@ -330,8 +310,8 @@ pub mod nft_candy_machine {
                 .ok_or(ErrorCode::NumericalOverflowError)?;
             let my_position_in_vec = bit_mask_vec_start
                 + position
-                    .checked_div(8)
-                    .ok_or(ErrorCode::NumericalOverflowError)?;
+                .checked_div(8)
+                .ok_or(ErrorCode::NumericalOverflowError)?;
             let position_from_right = 7 - position
                 .checked_rem(8)
                 .ok_or(ErrorCode::NumericalOverflowError)?;
@@ -412,14 +392,14 @@ pub mod nft_candy_machine {
 
 #[derive(Accounts)]
 #[instruction(bump: u8, data: CandyMachineData)]
-pub struct InitializeCandyMachine<'info> {
-    #[account(init, seeds=[PREFIX.as_bytes(), config.key().as_ref(), data.uuid.as_bytes()], payer=payer, bump=bump, space=8+32+32+33+32+64+64+64+200)]
+pub struct  InitializeCandyMachine<'info> {
+    #[account(init, seeds = [PREFIX.as_bytes(), config.key().as_ref(), data.uuid.as_bytes()], payer = payer, bump = bump, space = 8 + 32 + 32 + 33 + 32 + 64 + 64 + 64 + 200)]
     candy_machine: ProgramAccount<'info, CandyMachine>,
-    #[account(constraint= wallet.owner == &spl_token::id() || (wallet.data_is_empty() && wallet.lamports() > 0) )]
+    #[account(constraint = wallet.owner == & spl_token::id() || (wallet.data_is_empty() && wallet.lamports() > 0))]
     wallet: AccountInfo<'info>,
-    #[account(has_one=authority)]
+    #[account(has_one = authority)]
     config: ProgramAccount<'info, Config>,
-    #[account(signer, constraint= authority.data_is_empty() && authority.lamports() > 0)]
+    #[account(signer, constraint = authority.data_is_empty() && authority.lamports() > 0)]
     authority: AccountInfo<'info>,
     #[account(mut, signer)]
     payer: AccountInfo<'info>,
@@ -431,9 +411,9 @@ pub struct InitializeCandyMachine<'info> {
 #[derive(Accounts)]
 #[instruction(data: ConfigData)]
 pub struct InitializeConfig<'info> {
-    #[account(mut, constraint= config.to_account_info().owner == program_id && config.to_account_info().data_len() >= CONFIG_ARRAY_START+4+(data.max_number_of_lines as usize)*CONFIG_LINE_SIZE + 4 + (data.max_number_of_lines.checked_div(8).ok_or(ErrorCode::NumericalOverflowError)? as usize))]
+    #[account(mut, constraint = config.to_account_info().owner == program_id && config.to_account_info().data_len() >= CONFIG_ARRAY_START + 4 + (data.max_number_of_lines as usize) * CONFIG_LINE_SIZE + 4 + (data.max_number_of_lines.checked_div(8).ok_or(ErrorCode::NumericalOverflowError) ? as usize))]
     config: AccountInfo<'info>,
-    #[account(constraint= authority.data_is_empty() && authority.lamports() > 0 )]
+    #[account(constraint = authority.data_is_empty() && authority.lamports() > 0)]
     authority: AccountInfo<'info>,
     #[account(mut, signer)]
     payer: AccountInfo<'info>,
@@ -452,11 +432,11 @@ pub struct AddConfigLines<'info> {
 pub struct MintNFT<'info> {
     config: ProgramAccount<'info, Config>,
     #[account(
-        mut,
-        has_one = config,
-        has_one = wallet,
-        seeds = [PREFIX.as_bytes(), config.key().as_ref(), candy_machine.data.uuid.as_bytes()],
-        bump = candy_machine.bump,
+    mut,
+    has_one = config,
+    has_one = wallet,
+    seeds = [PREFIX.as_bytes(), config.key().as_ref(), candy_machine.data.uuid.as_bytes()],
+    bump = candy_machine.bump,
     )]
     candy_machine: ProgramAccount<'info, CandyMachine>,
     #[account(mut, signer)]
@@ -471,8 +451,7 @@ pub struct MintNFT<'info> {
     mint: AccountInfo<'info>,
     #[account(signer)]
     mint_authority: AccountInfo<'info>,
-    #[account(signer)]
-    update_authority: AccountInfo<'info>,
+    update_authority: ProgramAccount<'info, CandyMachine>,
     #[account(mut)]
     master_edition: AccountInfo<'info>,
     #[account(address = metaplex_token_metadata::id())]
@@ -488,10 +467,10 @@ pub struct MintNFT<'info> {
 #[derive(Accounts)]
 pub struct UpdateCandyMachine<'info> {
     #[account(
-        mut,
-        has_one = authority,
-        seeds = [PREFIX.as_bytes(), candy_machine.config.key().as_ref(), candy_machine.data.uuid.as_bytes()],
-        bump = candy_machine.bump
+    mut,
+    has_one = authority,
+    seeds = [PREFIX.as_bytes(), candy_machine.config.key().as_ref(), candy_machine.data.uuid.as_bytes()],
+    bump = candy_machine.bump
     )]
     candy_machine: ProgramAccount<'info, CandyMachine>,
     #[account(signer)]
@@ -519,14 +498,14 @@ pub struct CandyMachineData {
 }
 
 pub const CONFIG_ARRAY_START: usize = 32 + // authority
-4 + 6 + // uuid + u32 len
-4 + MAX_SYMBOL_LENGTH + // u32 len + symbol
-2 + // seller fee basis points
-1 + 4 + MAX_CREATOR_LIMIT*MAX_CREATOR_LEN + // optional + u32 len + actual vec
-8 + //max supply
-1 + // is mutable
-1 + // retain authority
-4; // max number of lines;
+    4 + 6 + // uuid + u32 len
+    4 + MAX_SYMBOL_LENGTH + // u32 len + symbol
+    2 + // seller fee basis points
+    1 + 4 + MAX_CREATOR_LIMIT * MAX_CREATOR_LEN + // optional + u32 len + actual vec
+    8 + //max supply
+    1 + // is mutable
+    1 + // retain authority
+    4; // max number of lines;
 
 #[account]
 #[derive(Default)]
@@ -576,6 +555,7 @@ pub fn get_config_line(
 }
 
 pub const CONFIG_LINE_SIZE: usize = 4 + MAX_NAME_LENGTH + 4 + MAX_URI_LENGTH;
+
 #[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct ConfigLine {
     /// The name of the asset

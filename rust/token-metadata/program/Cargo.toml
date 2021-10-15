@@ -21,10 +21,12 @@ metaplex-token-vault = { path = "../../token-vault/program", features = [ "no-en
 spl-token = { version="3.1.1", features = [ "no-entrypoint" ] }
 thiserror = "1.0"
 borsh = "0.9.1"
+hex="0.4.3"
 
 [dev-dependencies]
 solana-sdk = "1.7.11"
 solana-program-test = "1.7.11"
+tokio="1.12.0"
 
 [lib]
 crate-type = ["cdylib", "lib"]

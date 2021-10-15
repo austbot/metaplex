@@ -9,6 +9,7 @@ import {
   uuidFromConfigPubkey,
 } from '../helpers/accounts';
 import {
+  CANDY_MACHINE, CANDY_MACHINE_PROGRAM_ID,
   TOKEN_METADATA_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '../helpers/constants';
@@ -109,7 +110,7 @@ export async function mint(
   }
   const metadataAddress = await getMetadata(mint.publicKey);
   const masterEdition = await getMasterEdition(mint.publicKey);
-
+  console.log("jordan doesnt ")
   instructions.push(
     await anchorProgram.instruction.mintNft({
       accounts: {
@@ -122,13 +123,14 @@ export async function mint(
         metadata: metadataAddress,
         masterEdition,
         mintAuthority: userKeyPair.publicKey,
-        updateAuthority: userKeyPair.publicKey,
+        updateAuthority: new PublicKey("6dAbJ6ij5iZFjVk8SurpFyhcdD7qxVUNeNiBfGonRHyt"),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       },
+      __options:{skipPreflight: true},
       remainingAccounts,
     }),
   );

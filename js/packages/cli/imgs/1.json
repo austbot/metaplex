@@ -1,0 +1,27 @@
+{
+  "name": "02",
+  "symbol": "ASCIT",
+  "description": "testing ASCIT 2",
+  "seller_fee_basis_points": 5,
+  "image": "https://www.arweave.net/abcd5678?ext=png",
+  "external_url": "ASCIT.io",
+  "collection": {
+    "name": "Dreamland Test",
+    "family": "Dreamland"
+  },
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.arweave.net/abcd5678?ext=png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image/png",
+    "creators": [
+      {
+        "address": "Gsv13oph2i6nkJvNkVfuzkcbHWchz6viUtEg2vsxQMtM",
+        "share": 100
+      }
+    ]
+  }
+}
